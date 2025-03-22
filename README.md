@@ -2,35 +2,6 @@
 
 A modular Python toolkit for analyzing ancient metagenomic data — enabling streamlined workflows for damage analysis, contamination detection, database reference mapping, and visualization.
 
-Planned project structure:
-
-├── amt/
-│   ├── core/
-│   │   ├── damage_analysis.py
-│   │   ├── authentication.py
-│   │   └── contamination.py
-│   ├── database/
-│   │   ├── reference_db.py
-│   │   └── taxonomic_mapping.py
-│   ├── assembly/
-│   │   └── ancient_assembler.py
-│   ├── visualization/
-│   │   └── temporal_explorer.py
-│   ├── utils/
-│   │   ├── io.py
-│   │   └── statistics.py
-│   └── cpp_extensions/
-│       ├── setup.py
-│       ├── damage_patterns/
-│       │   ├── damage_patterns.cpp
-│       │   └── damage_patterns.h
-│       └── ancient_alignment/
-│           ├── ancient_alignment.cpp
-│           └── ancient_alignment.h
-└── tests/
-    ├── test_damage_analysis.py
-    └── test_authentication.py
-
 ---
 
 ## Features
