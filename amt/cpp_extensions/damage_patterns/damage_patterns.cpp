@@ -9,7 +9,6 @@
 #include <mutex>
 #include "damage_patterns.h"
 
-// Structure to hold damage pattern statistics
 struct DamageStats {
     std::vector<double> c_to_t_5prime;
     std::vector<double> g_to_a_3prime;
@@ -22,7 +21,6 @@ struct DamageStats {
     }
 };
 
-// Thread-safe counter for damage patterns
 class DamageCounter {
 private:
     std::mutex mtx;
@@ -49,12 +47,10 @@ public:
                  const std::vector<int>& c_5p, const std::vector<int>& g_3p) {
         std::lock_guard<std::mutex> lock(mtx);
         
-        // Update fragment length
         if (length >= 0 && length <= max_length) {
             fragment_length_counts[length]++;
         }
         
-        // Update damage pattern counts
         for (int i = 0; i < window_size; i++) {
             c_t_5prime_counts[i] += ct_5p[i];
             g_a_3prime_counts[i] += ga_3p[i];
@@ -81,14 +77,12 @@ public:
     DamageStats getStats() const {
         DamageStats stats(window_size, max_length);
         
-        // Calculate C→T frequencies at 5' end
         for (int i = 0; i < window_size; i++) {
             if (c_5prime_total[i] > 0) {
                 stats.c_to_t_5prime[i] = static_cast<double>(c_t_5prime_counts[i]) / c_5prime_total[i];
             }
         }
         
-        // Calculate G→A frequencies at 3' end
         for (int i = 0; i < window_size; i++) {
             if (g_3prime_total[i] > 0) {
                 stats.g_to_a_3prime[i] = static_cast<double>(g_a_3prime_counts[i]) / g_3prime_total[i];
@@ -102,7 +96,6 @@ public:
     }
 };
 
-// Process a single read for damage patterns
 void processRead(bam1_t* read, const char* ref_seq, int ref_start, int window_size,
                 std::vector<int>& ct_5p, std::vector<int>& ga_3p,
                 std::vector<int>& c_5p, std::vector<int>& g_3p) {
@@ -115,7 +108,6 @@ void processRead(bam1_t* read, const char* ref_seq, int ref_start, int window_si
     int read_pos = 0;
     int ref_pos = 0;
     
-    // Process CIGAR operations
     for (uint32_t i = 0; i < n_cigar; i++) {
         uint32_t op = cigar[i] & BAM_CIGAR_MASK;
         uint32_t len = cigar[i] >> BAM_CIGAR_SHIFT;
@@ -164,7 +156,6 @@ void processBamChunk(const char* bam_path, const char* ref_path,
                      const std::string& region, int window_size, 
                      int min_length, int max_length, DamageCounter& counter) {
     
-    // Open BAM file
     samFile* bam = sam_open(bam_path, "r");
     if (!bam) return;
     
@@ -174,7 +165,6 @@ void processBamChunk(const char* bam_path, const char* ref_path,
         return;
     }
     
-    // Load BAM index
     hts_idx_t* idx = sam_index_load(bam, bam_path);
     if (!idx) {
         bam_hdr_destroy(header);
@@ -191,7 +181,7 @@ void processBamChunk(const char* bam_path, const char* ref_path,
         return;
     }
     
-    // Set up iterator for the region
+    // Set up an iterator for the region
     hts_itr_t* iter = NULL;
     if (region.empty()) {
         iter = sam_itr_queryi(idx, HTS_IDX_START, 0, 0);
@@ -209,26 +199,21 @@ void processBamChunk(const char* bam_path, const char* ref_path,
     
     bam1_t* read = bam_init1();
     
-    // Vectors to count mutations in each read
     std::vector<int> ct_5p(window_size, 0);
     std::vector<int> ga_3p(window_size, 0);
     std::vector<int> c_5p(window_size, 0);
     std::vector<int> g_3p(window_size, 0);
     
-    // Process reads
     while (sam_itr_next(bam, iter, read) >= 0) {
-        // Skip unmapped, secondary, duplicate reads
         if (read->core.flag & (BAM_FUNMAP | BAM_FSECONDARY | BAM_FDUP)) {
             continue;
         }
         
-        // Filter by length
         int qlen = read->core.l_qseq;
         if (qlen < min_length || qlen > max_length) {
             continue;
         }
         
-        // Get reference sequence for this alignment
         int tid = read->core.tid;
         const char* ref_name = header->target_name[tid];
         int ref_start = read->core.pos;
@@ -241,16 +226,13 @@ void processBamChunk(const char* bam_path, const char* ref_path,
             continue;
         }
         
-        // Reset counters for this read
         std::fill(ct_5p.begin(), ct_5p.end(), 0);
         std::fill(ga_3p.begin(), ga_3p.end(), 0);
         std::fill(c_5p.begin(), c_5p.end(), 0);
         std::fill(g_3p.begin(), g_3p.end(), 0);
         
-        // Process the read
         processRead(read, ref_seq, 0, window_size, ct_5p, ga_3p, c_5p, g_3p);
         
-        // Add read stats to counter
         counter.addRead(qlen, ct_5p, ga_3p, c_5p, g_3p);
         
         free(ref_seq);
@@ -277,7 +259,7 @@ std::vector<std::string> splitBamRegions(const char* bam_path, int num_threads) 
         return regions;
     }
     
-    // Create regions based on chromosomes
+    // Regions based on chromosomes
     for (int i = 0; i < header->n_targets; i++) {
         regions.push_back(std::string(header->target_name[i]));
     }
@@ -306,7 +288,6 @@ static PyObject* analyze_damage_wrapper(PyObject* self, PyObject* args) {
         return NULL;
     }
     
-    // Initialize counters
     DamageCounter master_counter(window_size, max_length);
     std::vector<DamageCounter> thread_counters;
     std::vector<std::thread> workers;
@@ -314,13 +295,9 @@ static PyObject* analyze_damage_wrapper(PyObject* self, PyObject* args) {
     // Determine actual thread count
     int actual_threads = std::min(threads, static_cast<int>(regions.size()));
     if (actual_threads <= 0) actual_threads = 1;
-    
-    // Create thread counters
     for (int i = 0; i < actual_threads; i++) {
         thread_counters.emplace_back(window_size, max_length);
     }
-    
-    // Launch worker threads
     for (int t = 0; t < actual_threads; t++) {
         workers.emplace_back([&, t]() {
             for (size_t i = t; i < regions.size(); i += actual_threads) {
@@ -330,26 +307,20 @@ static PyObject* analyze_damage_wrapper(PyObject* self, PyObject* args) {
         });
     }
     
-    // Wait for threads to complete
     for (auto& worker : workers) {
         worker.join();
     }
     
-    // Merge results
     for (const auto& counter : thread_counters) {
         master_counter.merge(counter);
     }
     
-    // Get consolidated stats
     DamageStats stats = master_counter.getStats();
     
-    // Create Python dictionary to return results
     PyObject* result_dict = PyDict_New();
     
-    // Import numpy
     import_array();
     
-    // Add fragment length distribution
     npy_intp fragment_dims[1] = {static_cast<npy_intp>(max_length + 1)};
     PyObject* fragment_array = PyArray_SimpleNew(1, fragment_dims, NPY_INT);
     std::memcpy(PyArray_DATA((PyArrayObject*)fragment_array), 
@@ -357,34 +328,29 @@ static PyObject* analyze_damage_wrapper(PyObject* self, PyObject* args) {
                 stats.fragment_lengths.size() * sizeof(int));
     PyDict_SetItemString(result_dict, "fragment_length", fragment_array);
     
-    // Add 5' C→T damage pattern
     npy_intp window_dims[1] = {static_cast<npy_intp>(window_size)};
     PyObject* ct_5prime = PyArray_SimpleNew(1, window_dims, NPY_DOUBLE);
     std::memcpy(PyArray_DATA((PyArrayObject*)ct_5prime), 
                 stats.c_to_t_5prime.data(), 
                 window_size * sizeof(double));
     
-    // Add 3' G→A damage pattern
     PyObject* ga_3prime = PyArray_SimpleNew(1, window_dims, NPY_DOUBLE);
     std::memcpy(PyArray_DATA((PyArrayObject*)ga_3prime), 
                 stats.g_to_a_3prime.data(), 
                 window_size * sizeof(double));
     
-    // Create 5' and 3' damage pattern dictionaries
     PyObject* five_prime_dict = PyDict_New();
     PyDict_SetItemString(five_prime_dict, "C→T", ct_5prime);
     
     PyObject* three_prime_dict = PyDict_New();
     PyDict_SetItemString(three_prime_dict, "G→A", ga_3prime);
     
-    // Add dictionaries to result
     PyDict_SetItemString(result_dict, "5_prime", five_prime_dict);
     PyDict_SetItemString(result_dict, "3_prime", three_prime_dict);
     
     return result_dict;
 }
 
-// Module definition
 static PyMethodDef DamageMethods[] = {
     {"analyze_damage", analyze_damage_wrapper, METH_VARARGS,
      "Analyze ancient DNA damage patterns"},
