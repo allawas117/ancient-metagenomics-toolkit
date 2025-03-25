@@ -2,6 +2,7 @@ from setuptools import setup, Extension
 import numpy as np
 import os
 
+# SAMtools
 def find_htslib():
     for path in ['/usr/local', '/usr']:
         if os.path.exists(os.path.join(path, 'include', 'htslib')):
